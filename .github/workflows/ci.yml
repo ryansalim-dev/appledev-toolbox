@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests-macos:
+    name: Core tests (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift test --package-path Packages/ToolboxCore
+
+  core-tests-linux:
+    name: Core tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test --package-path Packages/ToolboxCore
+
+  app-build:
+    name: Mac app build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - run: xcodebuild -version
+      - run: >
+          xcodebuild build
+          -project AppleDevToolbox.xcodeproj
+          -scheme AppleDevToolbox
+          -destination 'platform=macOS'
+          -configuration Debug
+          CODE_SIGNING_ALLOWED=NO

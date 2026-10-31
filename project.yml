@@ -1,0 +1,46 @@
+name: AppleDevToolbox
+options:
+  bundleIdPrefix: com.ryansalim
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  ToolboxCore:
+    path: Packages/ToolboxCore
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  AppleDevToolbox:
+    type: application
+    platform: macOS
+    sources:
+      - App/Sources
+    dependencies:
+      - package: ToolboxCore
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: AppleDev Toolbox
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHumanReadableCopyright: ""
+    entitlements:
+      path: App/AppleDevToolbox.entitlements
+      properties:
+        # Not sandboxed on purpose: the app runs xcrun/atos/dwarfdump and reads
+        # ~/Library/Developer and ~/Library/Logs. Distributed with Developer ID.
+        com.apple.security.app-sandbox: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryansalim.AppleDevToolbox
+        PRODUCT_NAME: AppleDev Toolbox
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: targeted
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        COMBINE_HIDPI_IMAGES: YES
+    scheme: {}
