@@ -1,0 +1,134 @@
+{"app_name": "MyApp", "timestamp": "2026-10-30 14:22:05.00 +0100", "app_version": "2.3.0", "slice_uuid": "0b7a2a7c-1c0e-3f5e-9d1e-6a2a4a8c0f11", "build_version": "145", "platform": 2, "bundleID": "com.example.app", "share_with_app_devs": 1, "is_first_party": 0, "bug_type": "309", "os_version": "iPhone OS 18.1 (22B83)", "roots_installed": 0, "name": "MyApp", "incident_id": "8E2B9C4A-0F7D-4F25-9C35-2B3F1E6C7A10"}
+{
+  "uptime": 12000,
+  "procRole": "Foreground",
+  "version": 2,
+  "userID": 501,
+  "deployVersion": 210,
+  "modelCode": "iPhone16,1",
+  "coalitionID": 1234,
+  "osVersion": {
+    "isEmbedded": true,
+    "train": "iPhone OS 18.1",
+    "releaseType": "User",
+    "build": "22B83"
+  },
+  "captureTime": "2026-10-30 14:22:05.1234 +0100",
+  "codeSigningMonitor": 2,
+  "incident": "8E2B9C4A-0F7D-4F25-9C35-2B3F1E6C7A10",
+  "pid": 4242,
+  "cpuType": "ARM-64",
+  "roots_installed": 0,
+  "bug_type": "309",
+  "procLaunch": "2026-10-30 14:20:01.0000 +0100",
+  "procStartAbsTime": 1,
+  "procExitAbsTime": 2,
+  "procName": "MyApp",
+  "procPath": "/private/var/containers/Bundle/Application/ABC/MyApp.app/MyApp",
+  "bundleInfo": {
+    "CFBundleShortVersionString": "2.3.0",
+    "CFBundleVersion": "145",
+    "CFBundleIdentifier": "com.example.app"
+  },
+  "parentProc": "launchd",
+  "parentPid": 1,
+  "exception": {
+    "codes": "0x0000000000000001, 0x00000001a2b3c4d5",
+    "rawCodes": [
+      1,
+      7034881237
+    ],
+    "type": "EXC_BREAKPOINT",
+    "signal": "SIGTRAP"
+  },
+  "termination": {
+    "flags": 0,
+    "code": 5,
+    "namespace": "SIGNAL",
+    "indicator": "Trace/BPT trap: 5",
+    "byProc": "exc handler",
+    "byPid": 4242
+  },
+  "asi": {
+    "libswiftCore.dylib": [
+      "MyApp/ProfileViewModel.swift:88: Fatal error: Unexpectedly found nil while unwrapping an Optional value"
+    ]
+  },
+  "faultingThread": 0,
+  "threads": [
+    {
+      "triggered": true,
+      "id": 99001,
+      "queue": "com.apple.main-thread",
+      "threadState": {
+        "pc": {
+          "value": 4300016960
+        }
+      },
+      "frames": [
+        {
+          "imageOffset": 16960,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 17204,
+          "imageIndex": 0
+        },
+        {
+          "imageOffset": 123456,
+          "symbol": "-[UIApplication _run]",
+          "symbolLocation": 888,
+          "imageIndex": 1
+        },
+        {
+          "imageOffset": 5000,
+          "symbol": "main",
+          "symbolLocation": 120,
+          "imageIndex": 0,
+          "sourceFile": "/Users/dev/MyApp/MyApp/MyApp.swift",
+          "sourceLine": 12
+        }
+      ]
+    },
+    {
+      "id": 99002,
+      "name": "com.apple.uikit.eventfetch-thread",
+      "frames": [
+        {
+          "imageOffset": 2000,
+          "symbol": "mach_msg2_trap",
+          "symbolLocation": 8,
+          "imageIndex": 1
+        }
+      ]
+    }
+  ],
+  "usedImages": [
+    {
+      "source": "P",
+      "arch": "arm64",
+      "base": 4300000000,
+      "size": 81920,
+      "uuid": "0b7a2a7c-1c0e-3f5e-9d1e-6a2a4a8c0f11",
+      "path": "/private/var/containers/Bundle/Application/ABC/MyApp.app/MyApp",
+      "name": "MyApp"
+    },
+    {
+      "source": "S",
+      "arch": "arm64e",
+      "base": 6500000000,
+      "size": 30000000,
+      "uuid": "a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6",
+      "path": "/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore",
+      "name": "UIKitCore"
+    }
+  ],
+  "sharedCache": {
+    "base": 6400000000,
+    "size": 4000000000,
+    "uuid": "deadbeef-0000-1111-2222-333344445555"
+  },
+  "someFutureField": {
+    "added": "in iOS 27"
+  }
+}
