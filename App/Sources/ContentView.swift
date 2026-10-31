@@ -62,6 +62,8 @@ struct ContentView: View {
         case .certificates: CertificatesView()
         case .crashLogs: CrashLogView()
         case .push: PushTesterView()
+        case .universalLinks: UniversalLinksView()
+        case .plist: PlistView()
         case .some(let other): ComingSoonView(tool: other)
         case nil: ComingSoonView(tool: nil)
         }
