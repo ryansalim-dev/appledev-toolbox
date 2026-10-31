@@ -12,12 +12,14 @@ Paste anything (⇧⌘V), drop a file on the window, or open one (⌘O), and the
 | Signing certificates in the Keychain, with expiry and private-key check | ✅ first version |
 | Crash logs (`.ips`): readable report + symbolication via Spotlight/dSYM folders + `atos` | ✅ first version |
 | Push tester: APNs with a .p8 key (token auth) or a booted Simulator, payload templates and checks, plain-English APNs errors | ✅ first version |
+| Universal links: fetch AASA from your server and Apple's CDN, check hosting rules and file contents, test which URLs open the app | ✅ first version |
+| Plist & entitlements: view plists, an app's Info.plist / signed entitlements / profile / privacy manifest (.app or .ipa), compare two builds | ✅ first version (view only) |
 | JSON formatter (keeps key order, line/column errors) | ✅ |
 | JSON → Swift `Codable` | ✅ |
 | JWT decoder | ✅ |
 | Base64 (standard + URL-safe, hex dump for binary) | ✅ |
 | Timestamps (s/ms/µs/ns auto-detect, ISO 8601) | ✅ |
-| Universal links (AASA), Plist & entitlements, Privacy checker, App icon | ⏳ next |
+| Privacy checker, App icon | ⏳ next |
 
 ## Layout
 

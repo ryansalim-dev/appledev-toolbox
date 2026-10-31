@@ -74,7 +74,7 @@ enum ToolID: String, CaseIterable, Identifiable, Hashable {
     /// Tools not built yet show a placeholder.
     var isAvailable: Bool {
         switch self {
-        case .universalLinks, .plist, .privacy, .appIcon: return false
+        case .privacy, .appIcon: return false
         default: return true
         }
     }
