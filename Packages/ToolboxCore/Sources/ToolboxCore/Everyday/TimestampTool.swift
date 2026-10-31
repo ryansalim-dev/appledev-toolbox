@@ -56,7 +56,7 @@ public enum TimestampTool {
         return formatter.string(from: date)
     }
 
-    static func relativeDescription(of date: Date, now: Date) -> String {
+    public static func relativeDescription(of date: Date, now: Date) -> String {
         let delta = date.timeIntervalSince(now)
         let magnitude = abs(delta)
         if magnitude < 1 { return "now" }
