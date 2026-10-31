@@ -11,12 +11,13 @@ Paste anything (⇧⌘V), drop a file on the window, or open one (⌘O), and the
 | Provisioning profiles: browse Xcode's profiles, inspect, clean up expired/superseded | ✅ first version |
 | Signing certificates in the Keychain, with expiry and private-key check | ✅ first version |
 | Crash logs (`.ips`): readable report + symbolication via Spotlight/dSYM folders + `atos` | ✅ first version |
+| Push tester: APNs with a .p8 key (token auth) or a booted Simulator, payload templates and checks, plain-English APNs errors | ✅ first version |
 | JSON formatter (keeps key order, line/column errors) | ✅ |
 | JSON → Swift `Codable` | ✅ |
 | JWT decoder | ✅ |
 | Base64 (standard + URL-safe, hex dump for binary) | ✅ |
 | Timestamps (s/ms/µs/ns auto-detect, ISO 8601) | ✅ |
-| Push tester, Universal links (AASA), Plist & entitlements, Privacy checker, App icon | ⏳ next |
+| Universal links (AASA), Plist & entitlements, Privacy checker, App icon | ⏳ next |
 
 ## Layout
 
