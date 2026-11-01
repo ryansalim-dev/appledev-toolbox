@@ -71,11 +71,6 @@ enum ToolID: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// Tools not built yet show a placeholder.
-    var isAvailable: Bool {
-        switch self {
-        case .privacy, .appIcon: return false
-        default: return true
-        }
-    }
+    /// Tools not built yet show a placeholder. All v1 tools are available now.
+    var isAvailable: Bool { true }
 }

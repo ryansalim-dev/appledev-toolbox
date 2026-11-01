@@ -14,12 +14,13 @@ Paste anything (⇧⌘V), drop a file on the window, or open one (⌘O), and the
 | Push tester: APNs with a .p8 key (token auth) or a booted Simulator, payload templates and checks, plain-English APNs errors | ✅ first version |
 | Universal links: fetch AASA from your server and Apple's CDN, check hosting rules and file contents, test which URLs open the app | ✅ first version |
 | Plist & entitlements: view plists, an app's Info.plist / signed entitlements / profile / privacy manifest (.app or .ipa), compare two builds | ✅ first version (view only) |
+| Privacy checker: scan a project or .app/.ipa for required-reason APIs, manifest mistakes, SDKs without manifests, and missing usage descriptions | ✅ first version |
+| App icon: preview with the iOS mask and export AppIcon.appiconset (iOS single-size + dark/tinted, macOS sizes, watchOS) | ✅ first version |
 | JSON formatter (keeps key order, line/column errors) | ✅ |
 | JSON → Swift `Codable` | ✅ |
 | JWT decoder | ✅ |
 | Base64 (standard + URL-safe, hex dump for binary) | ✅ |
 | Timestamps (s/ms/µs/ns auto-detect, ISO 8601) | ✅ |
-| Privacy checker, App icon | ⏳ next |
 
 ## Layout
 
