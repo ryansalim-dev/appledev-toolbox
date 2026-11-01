@@ -64,7 +64,8 @@ struct ContentView: View {
         case .push: PushTesterView()
         case .universalLinks: UniversalLinksView()
         case .plist: PlistView()
-        case .some(let other): ComingSoonView(tool: other)
+        case .privacy: PrivacyCheckerView()
+        case .appIcon: AppIconView()
         case nil: ComingSoonView(tool: nil)
         }
     }
