@@ -32,13 +32,20 @@ struct OutputView: View {
     var isError = false
 
     var body: some View {
-        ScrollView([.vertical, .horizontal]) {
-            Text(text)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(isError ? Color.red : Color.primary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .padding(10)
+        // In a two-axis ScrollView, `maxWidth: .infinity` doesn't fill the viewport, so short
+        // output was centered and wide output started scrolled to the middle. Pin the text to
+        // the top-leading corner and make its frame at least the viewport size instead.
+        GeometryReader { proxy in
+            ScrollView([.vertical, .horizontal]) {
+                Text(text)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(isError ? Color.red : Color.primary)
+                    .textSelection(.enabled)
+                    .fixedSize()
+                    .padding(10)
+                    .frame(minWidth: proxy.size.width, minHeight: proxy.size.height, alignment: .topLeading)
+            }
+            .defaultScrollAnchor(.topLeading)
         }
         .background(Color(nsColor: .textBackgroundColor))
         .overlay(alignment: .topTrailing) {

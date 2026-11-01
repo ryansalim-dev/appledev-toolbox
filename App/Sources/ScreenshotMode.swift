@@ -38,8 +38,8 @@ enum ScreenshotMode {
                 model.selection = tool
                 try? await Task.sleep(for: .seconds(1.5))
                 let name = "\(tool.rawValue)-\(suffix)"
-                capture(window, to: output.appendingPathComponent("\(name).png"))
-                screencapture(window, to: output.appendingPathComponent("\(name)-screen.png"))
+                let url = output.appendingPathComponent("\(name).png")
+                if !screencapture(window, to: url) { capture(window, to: url) }
             }
         }
         print("screenshot: done")
@@ -58,7 +58,7 @@ enum ScreenshotMode {
           {"id": 2, "title": "Ship 1.0", "isDone": true, "assignee": null, "labels": [], "dueDate": "2026-12-01"}
         ]
         """
-        model.jwtInput = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkphbmUgQXBwbGVzZWVkIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLmV4YW1wbGUuY29tIiwiaWF0IjoxNzYxOTU1MjAwLCJleHAiOjE3OTM0OTEyMDAsInNjb3BlIjoicmVhZCB3cml0ZSJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        model.jwtInput = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkphbmUgQXBwbGVzZWVkIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLmV4YW1wbGUuY29tIiwiaWF0IjoxNzYxOTU1MjAwLCJleHAiOjE4OTM0NTYwMDAsInNjb3BlIjoicmVhZCB3cml0ZSJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
         model.base64Input = "SGVsbG8gZnJvbSBBcHBsZURldiBUb29sYm94IQ=="
         model.timestampInput = "1761987600"
         model.linksDomain = "example.com"
@@ -96,8 +96,8 @@ enum ScreenshotMode {
 
     // MARK: - Capture
 
-    /// Renders the window's frame view (including the title bar) without needing
-    /// screen recording permission.
+    /// Renders the window's frame view (including the title bar) without needing screen
+    /// recording permission. Vibrant materials such as the sidebar render blank.
     private static func capture(_ window: NSWindow, to url: URL) {
         guard let view = window.contentView?.superview ?? window.contentView,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
@@ -107,14 +107,16 @@ enum ScreenshotMode {
         }
     }
 
-    /// Real on-screen capture of the window. Needs screen recording permission, so it
-    /// may fail; the cached rendering above is the fallback.
-    private static func screencapture(_ window: NSWindow, to url: URL) {
+    /// Real on-screen capture of the window, which keeps the sidebar's vibrancy. Needs
+    /// screen recording permission, so it may fail; the cached rendering is the fallback.
+    @discardableResult
+    private static func screencapture(_ window: NSWindow, to url: URL) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         process.arguments = ["-x", "-o", "-l", String(window.windowNumber), url.path]
-        try? process.run()
+        guard (try? process.run()) != nil else { return false }
         process.waitUntilExit()
+        return process.terminationStatus == 0 && FileManager.default.fileExists(atPath: url.path)
     }
 }
 #endif
