@@ -1,0 +1,75 @@
+name: Screenshots
+
+# Builds the Mac app, launches it in screenshot mode (see App/Sources/ScreenshotMode.swift),
+# and saves a PNG of every tool in light and dark appearance. The images are uploaded as a
+# workflow artifact and also force-pushed to the `screenshots` branch so they can be viewed
+# on GitHub without downloading anything.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "App/**"
+      - "project.yml"
+      - ".github/workflows/screenshots.yml"
+  push:
+    branches: [main]
+    paths:
+      - "App/**"
+      - "project.yml"
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  screenshots:
+    name: Capture screenshots
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Build (Debug, ad-hoc signed)
+        run: >
+          xcodebuild build
+          -project AppleDevToolbox.xcodeproj
+          -scheme AppleDevToolbox
+          -destination 'platform=macOS'
+          -configuration Debug
+          -derivedDataPath build
+          CODE_SIGN_IDENTITY=-
+          CODE_SIGN_STYLE=Manual
+          DEVELOPMENT_TEAM=
+      - name: Run app in screenshot mode
+        env:
+          TOOLBOX_SCREENSHOT_DIR: ${{ github.workspace }}/screenshots
+          TOOLBOX_FIXTURES_DIR: ${{ github.workspace }}/Packages/ToolboxCore/Tests/ToolboxCoreTests/Fixtures
+        run: |
+          APP="build/Build/Products/Debug/AppleDev Toolbox.app/Contents/MacOS/AppleDev Toolbox"
+          "$APP" &
+          PID=$!
+          for i in $(seq 1 180); do
+            kill -0 "$PID" 2>/dev/null || break
+            sleep 1
+          done
+          if kill -0 "$PID" 2>/dev/null; then kill "$PID"; echo "timed out"; fi
+          ls -la screenshots
+          test -n "$(ls screenshots/*.png 2>/dev/null)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
+      - name: Publish to screenshots branch
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          cd screenshots
+          git init -q -b screenshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Screenshots for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" screenshots

@@ -48,6 +48,11 @@ struct ContentView: View {
             model.route(fileURL: url)
             return true
         }
+        #if DEBUG
+        .task {
+            if ScreenshotMode.isEnabled { await ScreenshotMode.run(model) }
+        }
+        #endif
     }
 
     @ViewBuilder
