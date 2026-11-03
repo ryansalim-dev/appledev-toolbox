@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+# setup-vscode-xcode.sh: one-shot setup to build, run and debug an Xcode project
+# in VS Code without opening Xcode.
+#
+#   bash setup-vscode-xcode.sh [options] [project-folder]
+#
+# Safe to re-run at any time: it only installs what's missing, keeps your scheme
+# and simulator choices, and keeps your own VS Code settings, tasks and launch configs.
+set -eo pipefail
+
+VERSION="1.0.0"
+
+usage() {
+  cat <<'EOF'
+Set up VS Code to build, run and debug an Xcode project without opening Xcode.
+
+Usage: setup-vscode-xcode.sh [options] [project-folder]
+
+  project-folder           Folder containing your .xcodeproj/.xcworkspace (default: current folder)
+  -s, --scheme NAME        Scheme to build (default: auto-detect, asks if unclear)
+  -d, --simulator NAME     Simulator to run on, e.g. "iPhone 16 Pro" (default: newest iPhone)
+  -c, --configuration NAME Build configuration (default: Debug)
+  -y, --yes                Never ask; accept every default
+      --skip-deps          Don't install Homebrew, VS Code, tools or extensions
+      --no-build           Skip the first build (code completion fills in after your first build)
+      --no-open            Don't open VS Code at the end
+  -h, --help               Show this help
+EOF
+}
+
+if [ -t 1 ]; then
+  B=$'\033[1m'; R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; C=$'\033[36m'; D=$'\033[2m'; N=$'\033[0m'
+else
+  B=""; R=""; G=""; Y=""; C=""; D=""; N=""
+fi
+STEP=0
+STEPS=8
+step() { STEP=$((STEP + 1)); printf '\n%s[%d/%d] %s%s\n' "$B" "$STEP" "$STEPS" "$*" "$N"; }
+info() { printf '%s▸%s %s\n' "$C" "$N" "$*"; }
+ok()   { printf '%s✔%s %s\n' "$G" "$N" "$*"; }
+warn() { printf '%s! %s%s\n' "$Y" "$*" "$N" >&2; }
+die()  { printf '\n%s✖ %s%s\n' "$R" "$*" "$N" >&2; exit 1; }
+
+ASSUME_YES=0; DO_BUILD=1; DO_OPEN=1; SKIP_DEPS=0
+PREF_SCHEME=""; PREF_SIM=""; CONFIGURATION=""; DIR=""
+need_value() { [ $# -ge 2 ] && [ -n "$2" ] || die "$1 needs a value (see --help)."; }
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -s|--scheme) need_value "$@"; PREF_SCHEME="$2"; shift 2 ;;
+    -d|--simulator) need_value "$@"; PREF_SIM="$2"; shift 2 ;;
+    -c|--configuration) need_value "$@"; CONFIGURATION="$2"; shift 2 ;;
+    -y|--yes) ASSUME_YES=1; shift ;;
+    --skip-deps) SKIP_DEPS=1; shift ;;
+    --no-build) DO_BUILD=0; shift ;;
+    --no-open) DO_OPEN=0; shift ;;
+    -h|--help) usage; exit 0 ;;
+    --version) echo "$VERSION"; exit 0 ;;
+    -*) die "Unknown option '$1' (see --help)." ;;
+    *) [ -z "$DIR" ] || die "Only one project folder, please."; DIR="$1"; shift ;;
+  esac
+done
+
+can_ask() { [ "$ASSUME_YES" != 1 ] && [ -t 0 ]; }
+confirm() {
+  local a
+  can_ask || return 0
+  read -r -p "$1 [Y/n] " a || a=""
+  case "$a" in n|N*) return 1 ;; *) return 0 ;; esac
+}
+
+# ── 1. Xcode toolchain ─────────────────────────────────────────────────────────
+check_xcode() {
+  step "Checking Xcode"
+  [ "$(uname -s)" = Darwin ] || die "This script needs macOS (Xcode only runs there)."
+  command -v python3 >/dev/null 2>&1 || die "python3 is missing. Run: xcode-select --install"
+
+  if ! xcodebuild -version >/dev/null 2>&1; then
+    # Usually means only the Command Line Tools are selected.
+    local app
+    app="$(find /Applications -maxdepth 1 -name 'Xcode*.app' 2>/dev/null | sort | head -n 1)"
+    [ -n "$app" ] || die "Xcode isn't installed. Install it from the App Store (you won't need to open it), then re-run this script."
+    info "Command Line Tools are selected; switching to $app (needs your password)."
+    sudo xcode-select -s "$app/Contents/Developer"
+    xcodebuild -version >/dev/null 2>&1 || die "xcodebuild still doesn't work. Try: sudo xcode-select -s $app/Contents/Developer"
+  fi
+  if ! xcodebuild -checkFirstLaunchStatus >/dev/null 2>&1; then
+    info "Xcode needs its one-time first-launch setup (license + components; needs your password)."
+    sudo xcodebuild -license accept
+    sudo xcodebuild -runFirstLaunch
+  fi
+  ok "$(xcodebuild -version | head -n 1) at $(xcode-select -p)"
+
+  if command -v DevToolsSecurity >/dev/null 2>&1 && ! DevToolsSecurity -status 2>/dev/null | grep -q enabled; then
+    if confirm "Enable Developer Mode for the debugger (so attaching doesn't ask for your password each time)?"; then
+      if sudo DevToolsSecurity -enable >/dev/null; then ok "Developer Mode enabled."
+      else warn "Couldn't enable Developer Mode; the debugger may ask for your password."; fi
+    fi
+  fi
+}
+
+# ── 2. Homebrew + command-line tools ───────────────────────────────────────────
+load_brew() {
+  local b
+  for b in "$(command -v brew 2>/dev/null || true)" /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [ -n "$b" ] && [ -x "$b" ]; then eval "$("$b" shellenv)"; return 0; fi
+  done
+  return 1
+}
+
+brew_install() {
+  if brew list --formula "$1" >/dev/null 2>&1; then
+    ok "$1 already installed"
+  else
+    info "Installing $1..."
+    brew install "$1" >/dev/null || die "brew install $1 failed."
+    ok "$1 installed"
+  fi
+}
+
+install_tools() {
+  step "Installing command-line tools"
+  if [ "$SKIP_DEPS" = 1 ]; then
+    load_brew || true
+    info "Skipped (--skip-deps)."
+    return 0
+  fi
+  if ! load_brew; then
+    confirm "Homebrew isn't installed. Install it now (needs your password)?" \
+      || die "Homebrew is needed to install xcode-build-server and xcbeautify. Install it from https://brew.sh and re-run."
+    NONINTERACTIVE=$([ "$ASSUME_YES" = 1 ] && echo 1 || echo "") \
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    load_brew || die "Homebrew installed but 'brew' wasn't found. Open a new terminal and re-run."
+  fi
+  brew_install xcode-build-server   # lets SourceKit-LSP understand .xcodeproj (code completion, jump to definition)
+  brew_install xcbeautify           # readable build logs + clickable errors
+  if [ -f project.yml ] && ! ls -d ./*.xcodeproj >/dev/null 2>&1; then brew_install xcodegen; fi
+  if [ -f Podfile ] && ! command -v pod >/dev/null 2>&1; then brew_install cocoapods; fi
+}
+
+# ── 3. VS Code ─────────────────────────────────────────────────────────────────
+find_code() {
+  local c
+  for c in "${CODE_BIN:-}" "$(command -v code 2>/dev/null || true)" \
+           "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
+           "$HOME/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"; do
+    if [ -n "$c" ] && [ -x "$c" ]; then CODE="$c"; return 0; fi
+  done
+  return 1
+}
+
+install_vscode() {
+  step "Checking VS Code"
+  CODE=""
+  if ! find_code; then
+    if [ "$SKIP_DEPS" = 1 ]; then warn "VS Code not found; skipping."; return 0; fi
+    confirm "VS Code isn't installed. Install it with Homebrew now?" || die "Install VS Code from https://code.visualstudio.com and re-run."
+    brew install --cask visual-studio-code >/dev/null || die "Installing VS Code failed."
+    find_code || die "VS Code installed but its 'code' command wasn't found."
+  fi
+  ok "VS Code found ($CODE)"
+}
+
+# ── 4. Find the project ────────────────────────────────────────────────────────
+list_bundles() {  # list_bundles <extension>
+  find . -maxdepth 3 \( -name Pods -o -name DerivedData -o -name .build -o -name .swiftpm -o -name node_modules \
+    -o -name '*.xcodeproj' -o -name '*.xcworkspace' -o -name '.git' \) -prune -name "*.$1" -print 2>/dev/null \
+    | sed 's|^\./||' | sort
+}
+
+pick_from() {  # pick_from <question> <items...>; sets PICKED
+  local q="$1" i=1 item ans
+  shift
+  if [ $# -eq 1 ] || ! can_ask; then PICKED="$1"; return 0; fi
+  echo "$q"
+  for item in "$@"; do printf '  %d) %s\n' "$i" "$item"; i=$((i + 1)); done
+  while :; do
+    read -r -p "Choose 1-$# (Enter = 1): " ans || ans=""
+    [ -z "$ans" ] && ans=1
+    case "$ans" in *[!0-9]*) ;; *) if [ "$ans" -ge 1 ] && [ "$ans" -le $# ]; then eval "PICKED=\${$ans}"; return 0; fi ;; esac
+    echo "Please type a number from 1 to $#."
+  done
+}
+
+find_project() {
+  step "Finding your Xcode project"
+  # Generated projects: create them first if they don't exist yet.
+  if [ -f project.yml ] && [ -z "$(list_bundles xcodeproj)" ]; then
+    command -v xcodegen >/dev/null 2>&1 || die "Found project.yml but XcodeGen isn't installed (brew install xcodegen)."
+    info "Generating the Xcode project with XcodeGen..."
+    xcodegen generate
+  fi
+  if { [ -f Project.swift ] || [ -f Workspace.swift ]; } && [ -z "$(list_bundles xcworkspace)$(list_bundles xcodeproj)" ]; then
+    command -v tuist >/dev/null 2>&1 || die "Found a Tuist project. Install Tuist (https://tuist.dev), run 'tuist generate --no-open', then re-run this script."
+    info "Generating the project with Tuist..."
+    tuist install >/dev/null 2>&1 || true
+    tuist generate --no-open
+  fi
+  if [ -f Podfile ] && { [ ! -d Pods ] || [ -z "$(list_bundles xcworkspace)" ]; }; then
+    if command -v pod >/dev/null 2>&1; then
+      info "Installing CocoaPods dependencies..."
+      pod install
+    else
+      warn "Found a Podfile but CocoaPods isn't installed; skipping 'pod install'."
+    fi
+  fi
+
+  local workspaces=() projects=() line
+  while IFS= read -r line; do [ -n "$line" ] && workspaces+=("$line"); done <<< "$(list_bundles xcworkspace)"
+  while IFS= read -r line; do [ -n "$line" ] && projects+=("$line"); done <<< "$(list_bundles xcodeproj)"
+
+  CONTAINER=""; CONTAINER_KIND=""
+  if [ ${#workspaces[@]} -gt 0 ]; then
+    pick_from "Found several workspaces. Which one?" "${workspaces[@]}"
+    CONTAINER="$PICKED"; CONTAINER_KIND=workspace
+  elif [ ${#projects[@]} -gt 0 ]; then
+    pick_from "Found several Xcode projects. Which one?" "${projects[@]}"
+    CONTAINER="$PICKED"; CONTAINER_KIND=project
+  elif [ -f Package.swift ]; then
+    die "This is a Swift package without an Xcode project. VS Code's Swift extension handles packages on its own; this script is for .xcodeproj/.xcworkspace apps."
+  else
+    die "No .xcodeproj or .xcworkspace found in $(pwd). Run this from your project folder or pass it as an argument."
+  fi
+  ok "Using $CONTAINER_KIND $CONTAINER"
+}
+
+# ── 5. Helper + scheme + simulator ─────────────────────────────────────────────
+write_helper() {
+  mkdir -p .vscode/xcode
+  cat > .vscode/xcode/xc.sh <<'XCSH_EOF'
+@@XC_SH@@
+XCSH_EOF
+  chmod +x .vscode/xcode/xc.sh
+}
+
+# shellcheck disable=SC2034  # variables are written out via ${!v}
+write_config() {
+  local cfg=.vscode/xcode/config.env prev v
+  XC_WORKSPACE=""; XC_PROJECT=""; XC_SCHEME=""; XC_CONFIGURATION="Debug"; XC_PLATFORM=""
+  XC_SIM_UDID=""; XC_SIM_NAME=""; XC_TARGET=""; XC_EXTRA_BUILD_ARGS=""
+  # shellcheck source=/dev/null
+  if [ -f "$cfg" ]; then . "$cfg"; fi
+  prev="${XC_WORKSPACE:-$XC_PROJECT}"
+  if [ "$CONTAINER_KIND" = workspace ]; then XC_WORKSPACE="$CONTAINER"; XC_PROJECT=""
+  else XC_PROJECT="$CONTAINER"; XC_WORKSPACE=""; fi
+  if [ "$prev" != "$CONTAINER" ]; then XC_SCHEME=""; XC_PLATFORM=""; fi
+  [ -z "$CONFIGURATION" ] || XC_CONFIGURATION="$CONFIGURATION"
+  {
+    echo "# Written by setup-vscode-xcode.sh"
+    for v in XC_WORKSPACE XC_PROJECT XC_SCHEME XC_CONFIGURATION XC_PLATFORM XC_SIM_UDID XC_SIM_NAME XC_TARGET XC_EXTRA_BUILD_ARGS; do
+      printf '%s=%q\n' "$v" "${!v}"
+    done
+  } > "$cfg"
+}
+
+configure_project() {
+  step "Choosing scheme and simulator"
+  write_helper
+  write_config
+  local auto=0
+  can_ask || auto=1
+  XC_AUTO=$auto XC_PREF_SCHEME="$PREF_SCHEME" bash .vscode/xcode/xc.sh select-scheme
+  if [ -n "$PREF_SIM" ]; then XC_AUTO=$auto XC_PREF_SIM="$PREF_SIM" bash .vscode/xcode/xc.sh select-sim; fi
+}
+
+# ── 6. VS Code workspace files ─────────────────────────────────────────────────
+write_vscode_files() {
+  step "Writing VS Code tasks, debugger and settings"
+  local lldb_lib gen
+  lldb_lib="$(dirname "$(xcode-select -p)")/SharedFrameworks/LLDB.framework/Versions/A/LLDB"
+  [ -f "$lldb_lib" ] || { warn "Xcode's LLDB not found at $lldb_lib; Swift variables may not show in the debugger."; lldb_lib=""; }
+  gen="$(mktemp "${TMPDIR:-/tmp}/xcvscode.XXXXXX")"
+  cat > "$gen" <<'GENPY_EOF'
+@@GEN_PY@@
+GENPY_EOF
+  LLDB_LIB="$lldb_lib" python3 "$gen" || { rm -f "$gen"; die "Writing the .vscode files failed."; }
+  rm -f "$gen"
+
+  if [ -d .git ] || [ -f .gitignore ] || git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local line added=0
+    touch .gitignore
+    for line in ".vscode/xcode/.state/" ".vscode/xcode/config.env" "buildServer.json"; do
+      if ! grep -qxF "$line" .gitignore; then
+        [ "$added" = 1 ] || printf '\n# VS Code + Xcode (machine-specific, from setup-vscode-xcode.sh)\n' >> .gitignore
+        echo "$line" >> .gitignore
+        added=1
+      fi
+    done
+    [ "$added" = 0 ] || ok "Added machine-specific files to .gitignore"
+  fi
+}
+
+# ── 7. Extensions ──────────────────────────────────────────────────────────────
+install_extensions() {
+  step "Installing VS Code extensions"
+  if [ "$SKIP_DEPS" = 1 ] || [ -z "$CODE" ]; then info "Skipped."; return 0; fi
+  local installed id
+  installed="$("$CODE" --list-extensions 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+  for id in swiftlang.swift-vscode vadimcn.vscode-lldb; do
+    if printf '%s\n' "$installed" | grep -qx "$id"; then
+      ok "$id already installed"
+    elif "$CODE" --install-extension "$id" >/dev/null 2>&1; then
+      ok "$id installed"
+    else
+      warn "Couldn't install $id. Install it from the Extensions view."
+    fi
+  done
+}
+
+# ── 8. First build ─────────────────────────────────────────────────────────────
+first_build() {
+  step "First build (feeds code completion)"
+  if [ "$DO_BUILD" = 0 ]; then info "Skipped (--no-build)."; return 0; fi
+  if bash .vscode/xcode/xc.sh build; then
+    bash .vscode/xcode/xc.sh refresh-index >/dev/null 2>&1 || true
+  else
+    warn "The first build failed. Setup is still complete: fix the errors in VS Code and press Shift+Cmd+B."
+  fi
+}
+
+main() {
+  if [ -n "$DIR" ]; then cd "$DIR" || die "Can't open folder '$DIR'."; fi
+  printf '%sVS Code setup for Xcode projects%s %sv%s · %s%s\n' "$B" "$N" "$D" "$VERSION" "$(pwd)" "$N"
+  check_xcode
+  install_tools
+  install_vscode
+  find_project
+  configure_project
+  write_vscode_files
+  install_extensions
+  first_build
+
+  printf '\n%s✔ All set.%s In VS Code:\n' "$G$B" "$N"
+  echo "   • Shift+Cmd+B          build"
+  echo "   • F5                   build, launch on the simulator and debug (breakpoints work)"
+  echo "   • Cmd+Shift+P → Tasks: Run Task → Xcode: Run      run without the debugger"
+  echo "   • Xcode: Select Scheme / Xcode: Select Simulator   change targets any time"
+  echo "   Re-run this script whenever you like; it's safe."
+  if [ "$DO_OPEN" = 1 ] && [ -n "$CODE" ]; then "$CODE" . >/dev/null 2>&1 || true; fi
+}
+
+main

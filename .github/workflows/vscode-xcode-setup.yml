@@ -1,0 +1,54 @@
+name: VS Code Xcode setup
+
+on:
+  pull_request:
+    paths:
+      - "tools/vscode-xcode-setup/**"
+      - ".github/workflows/vscode-xcode-setup.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/vscode-xcode-setup/**"
+      - ".github/workflows/vscode-xcode-setup.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: vscode-xcode-setup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint + bundle check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/vscode-xcode-setup/build.py --check
+      - run: shellcheck -s bash tools/vscode-xcode-setup/src/xc.sh tools/vscode-xcode-setup/setup-vscode-xcode.sh tools/vscode-xcode-setup/test/ci-test.sh
+
+  ios-app:
+    name: iOS app on Simulator (setup, build, run, LLDB, CodeLLDB)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: /bin/bash tools/vscode-xcode-setup/test/ci-test.sh ios
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-ios
+          path: ${{ runner.temp }}/vscode-setup-logs
+          if-no-files-found: ignore
+
+  mac-app:
+    name: Mac app (this repo, setup, build, run, LLDB)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: /bin/bash tools/vscode-xcode-setup/test/ci-test.sh macos
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-macos
+          path: ${{ runner.temp }}/vscode-setup-logs
+          if-no-files-found: ignore

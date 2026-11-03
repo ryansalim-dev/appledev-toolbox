@@ -29,6 +29,7 @@ Packages/ToolboxCore/   Swift package: every parser and generator. Foundation on
                         builds and tests on macOS and Linux.
 App/Sources/            SwiftUI Mac app (macOS 14+). Views + Platform/ (Process, Security, atos).
 project.yml             XcodeGen spec for the app.
+tools/vscode-xcode-setup/ One-step setup to build, run and debug any Xcode project in VS Code.
 ```
 
 Keep logic in `ToolboxCore` with tests; keep the app layer thin. Anything that depends on Xcode internals (paths, `xcrun` output formats) is isolated so yearly Xcode changes stay contained.
