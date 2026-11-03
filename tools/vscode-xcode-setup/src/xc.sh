@@ -100,8 +100,9 @@ is_sim() { [ -n "$(sim_family)" ]; }
 dest_label() { if is_sim; then echo "$XC_SIM_NAME"; else echo "macOS"; fi; }
 re_escape() { printf '%s' "$1" | sed 's/[][\.*^$+?(){}|]/\\&/g'; }
 
+# Force the terminal renderer: on CI, xcbeautify would otherwise switch to GitHub annotations.
 pretty() {
-  if command -v xcbeautify >/dev/null 2>&1; then xcbeautify --disable-colored-output; else cat; fi
+  if command -v xcbeautify >/dev/null 2>&1; then xcbeautify --renderer terminal --disable-colored-output; else cat; fi
 }
 
 # Picks the app target from `xcodebuild -showBuildSettings -json` and prints shell assignments.
