@@ -834,17 +834,18 @@ def save(name, obj, note):
     print("  Wrote %s" % path)
 
 
+# xcbeautify marks errors with ❌ / warnings with ⚠️, or [x] / [!] when colors are off.
 ERR = {
     "owner": "xcode", "source": "xcode", "fileLocation": "absolute", "severity": "error",
     "pattern": {
-        "regexp": r"^(?:❌\s+|(?=/.+:\d+:\d+: error: ))(/.+?):(\d+):(\d+):\s+(?:error:\s+)?(.*)$",
+        "regexp": r"^(?:(?:❌|\[x\])\s+|(?=/.+:\d+:\d+: error: ))(/.+?):(\d+):(\d+):\s+(?:error:\s+)?(.*)$",
         "file": 1, "line": 2, "column": 3, "message": 4,
     },
 }
 WARN = {
     "owner": "xcode", "source": "xcode", "fileLocation": "absolute", "severity": "warning",
     "pattern": {
-        "regexp": r"^(?:⚠️?\s+|(?=/.+:\d+:\d+: warning: ))(/.+?):(\d+):(\d+):\s+(?:warning:\s+)?(.*)$",
+        "regexp": r"^(?:(?:⚠️?|\[!\])\s+|(?=/.+:\d+:\d+: warning: ))(/.+?):(\d+):(\d+):\s+(?:warning:\s+)?(.*)$",
         "file": 1, "line": 2, "column": 3, "message": 4,
     },
 }
