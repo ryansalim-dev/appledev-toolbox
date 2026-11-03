@@ -290,6 +290,16 @@ GENPY_EOF
 }
 
 # ── 7. Extensions ──────────────────────────────────────────────────────────────
+install_extension() {  # The marketplace (and the extensions' own dependencies) can fail transiently; retry.
+  local id="$1" attempt out=""
+  for attempt in 1 2 3; do
+    if out="$("$CODE" --install-extension "$1" 2>&1)"; then ok "$id installed"; return 0; fi
+    [ "$attempt" = 3 ] || { info "Installing $id failed, retrying..."; sleep $((attempt * 5)); }
+  done
+  warn "Couldn't install $id. Install it from the Extensions view. VS Code said:"
+  printf '%s\n' "$out" | tail -n 5 >&2
+}
+
 install_extensions() {
   step "Installing VS Code extensions"
   if [ "$SKIP_DEPS" = 1 ] || [ -z "$CODE" ]; then info "Skipped."; return 0; fi
@@ -298,10 +308,8 @@ install_extensions() {
   for id in swiftlang.swift-vscode vadimcn.vscode-lldb; do
     if printf '%s\n' "$installed" | grep -qx "$id"; then
       ok "$id already installed"
-    elif "$CODE" --install-extension "$id" >/dev/null 2>&1; then
-      ok "$id installed"
     else
-      warn "Couldn't install $id. Install it from the Extensions view."
+      install_extension "$id"
     fi
   done
 }
