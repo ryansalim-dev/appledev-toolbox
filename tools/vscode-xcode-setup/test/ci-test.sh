@@ -162,10 +162,10 @@ EOF
     echo "No adapter in $EXT_DIR yet:"; find "$EXT_DIR" -maxdepth 2 | head -n 30
     ver="${EXT_DIR##*vadimcn.vscode-lldb-}"; ver="${ver%%-*}"
     case "$(uname -m)" in arm64) plat=darwin-arm64 ;; *) plat=darwin-x64 ;; esac
-    curl -fsSL -o "$LOGS/codelldb.vsix" "https://github.com/vadimcn/codelldb/releases/download/v$ver/codelldb-$plat.vsix" \
+    curl -fsSL -o "$WORK.codelldb.vsix" "https://github.com/vadimcn/codelldb/releases/download/v$ver/codelldb-$plat.vsix" \
       || fail "couldn't download CodeLLDB $ver for $plat"
-    mkdir -p "$LOGS/codelldb" && (cd "$LOGS/codelldb" && unzip -q -o "$LOGS/codelldb.vsix")
-    ADAPTER="$(find "$LOGS/codelldb" -path '*/adapter/codelldb' -type f | head -n 1)"
+    mkdir -p "$WORK.codelldb" && (cd "$WORK.codelldb" && unzip -q -o "$WORK.codelldb.vsix")
+    ADAPTER="$(find "$WORK.codelldb" -path '*/adapter/codelldb' -type f | head -n 1)"
     chmod +x "$ADAPTER" 2>/dev/null || true
   fi
   assert "CodeLLDB adapter binary not found" test -x "$ADAPTER"
