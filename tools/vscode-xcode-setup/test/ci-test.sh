@@ -139,7 +139,7 @@ breakpoint set --file Greeter.swift --line $LINE
 command source "$PWD/$STATE/process.lldb"
 process continue
 frame variable message
-thread backtrace 3
+thread backtrace -c 3
 process detach
 EOF
   with_timeout 180 xcrun lldb --batch -s "$LOGS/cmds.lldb" > "$LOGS/lldb.log" 2>&1 || true
@@ -153,7 +153,21 @@ EOF
 
   # ───────────────────────────────────────────────────────────────────────────
   step "F5 hand-off works with CodeLLDB (the VS Code debugger), driven over DAP"
-  ADAPTER="$(find "$HOME/.vscode/extensions" -maxdepth 3 -path "*vadimcn.vscode-lldb-*/adapter/codelldb" 2>/dev/null | sort | tail -n 1)"
+  EXT_DIR="$(find "$HOME/.vscode/extensions" -maxdepth 1 -name 'vadimcn.vscode-lldb-*' 2>/dev/null | sort | tail -n 1)"
+  assert "CodeLLDB extension folder not found" test -n "$EXT_DIR"
+  ADAPTER="$(find "$EXT_DIR" -path '*/adapter/codelldb' -type f 2>/dev/null | head -n 1)"
+  if [ -z "$ADAPTER" ]; then
+    # Some CodeLLDB builds fetch their platform package (debug adapter) the first time VS Code
+    # activates them, which can't happen headless. Fetch the same version's package directly.
+    echo "No adapter in $EXT_DIR yet:"; find "$EXT_DIR" -maxdepth 2 | head -n 30
+    ver="${EXT_DIR##*vadimcn.vscode-lldb-}"; ver="${ver%%-*}"
+    case "$(uname -m)" in arm64) plat=darwin-arm64 ;; *) plat=darwin-x64 ;; esac
+    curl -fsSL -o "$LOGS/codelldb.vsix" "https://github.com/vadimcn/codelldb/releases/download/v$ver/codelldb-$plat.vsix" \
+      || fail "couldn't download CodeLLDB $ver for $plat"
+    mkdir -p "$LOGS/codelldb" && (cd "$LOGS/codelldb" && unzip -q -o "$LOGS/codelldb.vsix")
+    ADAPTER="$(find "$LOGS/codelldb" -path '*/adapter/codelldb' -type f | head -n 1)"
+    chmod +x "$ADAPTER" 2>/dev/null || true
+  fi
   assert "CodeLLDB adapter binary not found" test -x "$ADAPTER"
   echo "adapter: $ADAPTER"
   XC debug-prepare > "$LOGS/prepare-dap.log" 2>&1 &
