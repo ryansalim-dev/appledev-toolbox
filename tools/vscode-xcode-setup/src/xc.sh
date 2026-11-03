@@ -144,6 +144,28 @@ for s in o.get("schemes", []):
 
 # Lists available simulators of one family. First line: "<default index>\t<exact match 0|1>",
 # then one "<udid>\t<label>\t<name>" line per simulator, newest runtime first.
+# Runs a command in a pseudo-terminal and copies its output, unbuffered, to a file ("-" = stdout).
+# simctl holds its output back when writing to a file or pipe; a terminal makes it stream.
+PY_PTY='
+import os, pty, sys
+out = sys.stdout.buffer if sys.argv[1] == "-" else open(sys.argv[1], "ab", buffering=0)
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp(sys.argv[2], sys.argv[2:])
+while True:
+    try:
+        data = os.read(fd, 4096)
+    except OSError:
+        break
+    if not data:
+        break
+    out.write(data)
+    out.flush()
+_, status = os.waitpid(pid, 0)
+sys.exit(os.WEXITSTATUS(status) if os.WIFEXITED(status) else 1)
+'
+run_in_pty() { local dest="$1"; shift; python3 -I -c "$PY_PTY" "$dest" "$@"; }
+
 PY_SIMS='
 import json, re, sys
 fam, pref, cur_udid, cur_name = (sys.argv[1:] + ["", "", "", ""])[:4]
@@ -202,7 +224,7 @@ detect_platform() {
   info "Detecting the platform of scheme '$XC_SCHEME'..."
   # shellcheck disable=SC2034  # set by eval
   local SUPPORTED_PLATFORMS="" APP_PATH EXEC_PATH BUNDLE_ID PRODUCT_NAME TARGET_NAME assignments
-  assignments="$(xcodebuild "${CARGS[@]}" -scheme "$XC_SCHEME" -showBuildSettings -json 2>/dev/null | python3 -c "$PY_PICK" "$XC_TARGET")" || assignments=""
+  assignments="$(xcodebuild "${CARGS[@]}" -scheme "$XC_SCHEME" -showBuildSettings -json 2>/dev/null | python3 -I -c "$PY_PICK" "$XC_TARGET")" || assignments=""
   eval "$assignments"
   case " $SUPPORTED_PLATFORMS " in
     *" iphonesimulator "*) XC_PLATFORM=ios ;;
@@ -242,7 +264,7 @@ load_settings() {
     . "$cache"
     return 0
   fi
-  assignments="$(xcodebuild "${BARGS[@]}" -showBuildSettings -json 2>/dev/null | python3 -c "$PY_PICK" "$XC_TARGET")" \
+  assignments="$(xcodebuild "${BARGS[@]}" -showBuildSettings -json 2>/dev/null | python3 -I -c "$PY_PICK" "$XC_TARGET")" \
     || die "Couldn't read build settings for scheme '$XC_SCHEME'."
   printf '%s\n%s\n' "$key" "$assignments" > "$cache"
   eval "$assignments"
@@ -284,7 +306,10 @@ cmd_run() {
   boot_sim
   install_app
   info "Launching $BUNDLE_ID. App output follows; Ctrl+C or 'Xcode: Stop App' stops it."
-  exec xcrun simctl launch --console-pty --terminate-running-process "$XC_SIM_UDID" "$BUNDLE_ID"
+  if [ -t 1 ]; then
+    exec xcrun simctl launch --console-pty --terminate-running-process "$XC_SIM_UDID" "$BUNDLE_ID"
+  fi
+  run_in_pty - xcrun simctl launch --console-pty --terminate-running-process "$XC_SIM_UDID" "$BUNDLE_ID"
 }
 
 BG_PIDS=""
@@ -313,8 +338,8 @@ cmd_debug_prepare() {
   # --console-pty gives the app a terminal, so print() output isn't held back by buffering.
   : > "$STATE/console.log"
   trap stop_bg EXIT INT TERM HUP
-  xcrun simctl launch --console-pty --wait-for-debugger --terminate-running-process \
-    "$XC_SIM_UDID" "$BUNDLE_ID" > "$STATE/console.log" 2>&1 &
+  run_in_pty "$STATE/console.log" xcrun simctl launch --console-pty --wait-for-debugger \
+    --terminate-running-process "$XC_SIM_UDID" "$BUNDLE_ID" </dev/null >/dev/null 2>&1 &
   launcher=$!
   BG_PIDS="$launcher"
   for i in $(seq 1 120); do
@@ -373,7 +398,7 @@ cmd_select_scheme() {
   [ "$1" = "--prompt" ] && force=1
   container_args
   info "Reading schemes from ${XC_WORKSPACE:-$XC_PROJECT}..."
-  list="$(xcodebuild "${CARGS[@]}" -list -json 2>/dev/null | python3 -c "$PY_SCHEMES")" \
+  list="$(xcodebuild "${CARGS[@]}" -list -json 2>/dev/null | python3 -I -c "$PY_SCHEMES")" \
     || die "Couldn't list schemes. Try running: xcodebuild ${CARGS[*]} -list"
   local schemes=()
   while IFS= read -r s; do [ -n "$s" ] && schemes+=("$s"); done <<< "$list"
@@ -420,7 +445,7 @@ cmd_select_sim() {
   if ! is_sim; then ok "This scheme runs on macOS, so no simulator is needed."; return 0; fi
   fam="$(sim_family)"
   rows="$(xcrun simctl list devices available -j 2>/dev/null \
-    | python3 -c "$PY_SIMS" "$fam" "${XC_PREF_SIM:-}" "$XC_SIM_UDID" "$XC_SIM_NAME")" || rows=""
+    | python3 -I -c "$PY_SIMS" "$fam" "${XC_PREF_SIM:-}" "$XC_SIM_UDID" "$XC_SIM_NAME")" || rows=""
   if [ -z "$rows" ]; then
     warn "No $(download_name) simulators are installed."
     if interactive; then
@@ -428,7 +453,7 @@ cmd_select_sim() {
       case "$a" in n|N*) die "Install one with: xcodebuild -downloadPlatform $(download_name)" ;; esac
       xcodebuild -downloadPlatform "$(download_name)" || die "Download failed."
       rows="$(xcrun simctl list devices available -j 2>/dev/null \
-        | python3 -c "$PY_SIMS" "$fam" "${XC_PREF_SIM:-}" "$XC_SIM_UDID" "$XC_SIM_NAME")" || rows=""
+        | python3 -I -c "$PY_SIMS" "$fam" "${XC_PREF_SIM:-}" "$XC_SIM_UDID" "$XC_SIM_NAME")" || rows=""
     fi
     [ -n "$rows" ] || die "Install a runtime with: xcodebuild -downloadPlatform $(download_name)"
   fi
